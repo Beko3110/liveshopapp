@@ -1,35 +1,45 @@
 // Import shared socket instance
 import socket from './socket-client.js';
 
-const chatMessages = document.getElementById('chat-messages');
-const messageForm = document.getElementById('message-form');
-const ROOM_ID = document.getElementById('stream-container').dataset.roomId;
-
-// Send chat message
-messageForm.addEventListener('submit', e => {
-    e.preventDefault();
-    const input = messageForm.querySelector('input');
-    const message = input.value.trim();
+// Initialize chat functionality
+function initializeChat() {
+    const chatMessages = document.getElementById('chat-messages');
+    const messageForm = document.getElementById('message-form');
+    const streamContainer = document.getElementById('stream-container');
     
-    if (message) {
-        socket.emit('chat_message', {
-            message: message,
-            room: ROOM_ID
-        });
-        input.value = '';
-    }
-});
+    if (!streamContainer) return;
+    
+    const roomId = streamContainer.dataset.roomId;
 
-// Receive chat message
-socket.on('chat_message', data => {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'chat-message';
-    messageDiv.textContent = `${data.username}: ${data.message}`;
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-});
+    // Send chat message
+    messageForm.addEventListener('submit', e => {
+        e.preventDefault();
+        const input = messageForm.querySelector('input');
+        const message = input.value.trim();
+        
+        if (message) {
+            socket.emit('chat_message', {
+                message: message,
+                room: roomId
+            });
+            input.value = '';
+        }
+    });
 
-// Join room
-socket.emit('join_room', {
-    room: ROOM_ID
-});
+    // Receive chat message
+    socket.on('chat_message', data => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.textContent = `${data.username}: ${data.message}`;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
+
+    // Join room
+    socket.emit('join_room', {
+        room: roomId
+    });
+}
+
+// Initialize chat when DOM is loaded
+document.addEventListener('DOMContentLoaded', initializeChat);
