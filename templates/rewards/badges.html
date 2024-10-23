@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">Your Badges</h2>
+    
+    <div class="row">
+        {% for badge in badges %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="bi bi-award display-4 text-primary mb-3"></i>
+                    <h5 class="card-title">{{ badge.name }}</h5>
+                    <p class="card-text">{{ badge.description }}</p>
+                    <small class="text-muted">Earned on {{ badge.created_at.strftime('%Y-%m-%d') }}</small>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center">
+            <p class="lead">You haven't earned any badges yet. Keep participating to earn badges!</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

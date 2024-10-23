@@ -42,11 +42,13 @@ def create_app():
     from routes.orders import orders_bp
     from routes.stream import stream_bp
     from routes.social import social_bp
+    from routes.rewards import rewards_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(stream_bp)
     app.register_blueprint(social_bp)
+    app.register_blueprint(rewards_bp)
     
     return app

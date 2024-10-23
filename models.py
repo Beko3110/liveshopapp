@@ -17,6 +17,8 @@ class User(db.Model):
     products = db.relationship('Product', backref='seller', lazy=True)
     streams = db.relationship('StreamSession', backref='seller', lazy=True)
     language_preference = db.Column(db.String(10), default='en')
+    loyalty_points = db.Column(db.Integer, default=0)
+    last_daily_reward = db.Column(db.DateTime)
     
     # Followers relationship
     followed = db.relationship(
@@ -49,6 +51,59 @@ class User(db.Model):
     def is_following(self, user):
         return self.followed.filter(followers.c.followed_id == user.id).count() > 0
 
+    def add_loyalty_points(self, points):
+        self.loyalty_points += points
+        # Check for new badge achievements
+        earned_badges = []
+        if self.loyalty_points >= 1000 and not self.has_badge("Gold Member"):
+            badge = Badge(user_id=self.id, name="Gold Member", 
+                        description="Earned 1000 loyalty points")
+            db.session.add(badge)
+            earned_badges.append(badge)
+        elif self.loyalty_points >= 500 and not self.has_badge("Silver Member"):
+            badge = Badge(user_id=self.id, name="Silver Member", 
+                        description="Earned 500 loyalty points")
+            db.session.add(badge)
+            earned_badges.append(badge)
+        elif self.loyalty_points >= 100 and not self.has_badge("Bronze Member"):
+            badge = Badge(user_id=self.id, name="Bronze Member", 
+                        description="Earned 100 loyalty points")
+            db.session.add(badge)
+            earned_badges.append(badge)
+        return earned_badges
+
+    def has_badge(self, badge_name):
+        return Badge.query.filter_by(user_id=self.id, name=badge_name).first() is not None
+
+    def claim_daily_reward(self):
+        now = datetime.utcnow()
+        if not self.last_daily_reward or (now - self.last_daily_reward).days >= 1:
+            self.last_daily_reward = now
+            points = 50  # Base daily reward
+            # Bonus for consecutive days (implement later)
+            self.add_loyalty_points(points)
+            return points
+        return 0
+
+class Badge(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    description = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref='badges')
+
+class FlashSale(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    stream_id = db.Column(db.Integer, db.ForeignKey('stream_session.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    discount_percentage = db.Column(db.Integer, nullable=False)
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    stream = db.relationship('StreamSession', backref='flash_sales')
+    product = db.relationship('Product', backref='flash_sales')
+
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -63,117 +118,35 @@ class Product(db.Model):
     view_count = db.Column(db.Integer, default=0)
     previous_price = db.Column(db.Float)
     last_price_change = db.Column(db.DateTime)
+    category = db.Column(db.String(50))
+    ar_model_url = db.Column(db.String(200))
 
-class Order(db.Model):
+class Wishlist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
-    quantity = db.Column(db.Integer, nullable=False)
-    total_amount = db.Column(db.Float, nullable=False)
-    status = db.Column(db.String(20), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    product = db.relationship('Product', backref='orders', lazy=True)
-    user = db.relationship('User', backref='orders', lazy=True)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref='wishlist_items')
+    product = db.relationship('Product', backref='wishlist_entries')
 
-class StreamSession(db.Model):
+class GroupBuying(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    seller_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    title = db.Column(db.String(100), nullable=False)
-    status = db.Column(db.String(20), default='active')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    scheduled_for = db.Column(db.DateTime)
-    recording_url = db.Column(db.String(200))
-    polls = db.relationship('Poll', backref='stream', lazy=True)
-    questions = db.relationship('Question', backref='stream', lazy=True)
-    
-    def __init__(self, seller_id, title, scheduled_for=None):
-        self.seller_id = seller_id
-        self.title = title
-        self.scheduled_for = scheduled_for
-
-class ActivityFeed(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    activity_type = db.Column(db.String(50), nullable=False)  # 'stream_start', 'new_product', 'follow'
-    target_id = db.Column(db.Integer)  # ID of the related item (stream, product, etc.)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='activities', lazy=True)
-
-class Review(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
-    rating = db.Column(db.Integer, nullable=False)
-    comment = db.Column(db.Text)
-    image_url = db.Column(db.String(200))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='reviews', lazy=True)
-
-class Poll(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    stream_id = db.Column(db.Integer, db.ForeignKey('stream_session.id'), nullable=False)
-    question = db.Column(db.String(200), nullable=False)
-    options = db.Column(db.JSON, nullable=False)
-    votes = db.Column(db.JSON, default={})
-    status = db.Column(db.String(20), default='active')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def __init__(self, stream_id, question, options, votes=None):
-        self.stream_id = stream_id
-        self.question = question
-        self.options = options
-        self.votes = votes or {}
-
-class Question(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    stream_id = db.Column(db.Integer, db.ForeignKey('stream_session.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    question = db.Column(db.Text, nullable=False)
-    answer = db.Column(db.Text)
-    votes_count = db.Column(db.Integer, default=0)
-    status = db.Column(db.String(20), default='pending')  # pending, answered
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='questions', lazy=True)
-    
-    def __init__(self, stream_id, user_id, question):
-        self.stream_id = stream_id
-        self.user_id = user_id
-        self.question = question
-
-class Message(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    read = db.Column(db.Boolean, default=False)
-    sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
-    receiver = db.relationship('User', foreign_keys=[receiver_id], backref='received_messages')
-
-class Comment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    parent_id = db.Column(db.Integer, db.ForeignKey('comment.id'))
-    user = db.relationship('User', backref='comments')
-    replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]))
-
-class PriceAlert(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     target_price = db.Column(db.Float, nullable=False)
+    min_buyers = db.Column(db.Integer, nullable=False)
+    current_buyers = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(20), default='active')  # active, completed, expired
+    expires_at = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    active = db.Column(db.Boolean, default=True)
-    user = db.relationship('User', backref='price_alerts')
-    product = db.relationship('Product', backref='price_alerts')
+    product = db.relationship('Product', backref='group_buys')
 
-class ViewHistory(db.Model):
+class GroupBuyingParticipant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    group_buying_id = db.Column(db.Integer, db.ForeignKey('group_buying.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
-    viewed_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='view_history')
-    product = db.relationship('Product', backref='views')
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+    group_buying = db.relationship('GroupBuying', backref='participants')
+    user = db.relationship('User', backref='group_buying_participations')
+
+# Import other required models
+from models_other import Order, StreamSession, ActivityFeed, Review, Question, Poll, Message, Comment, PriceAlert, ViewHistory

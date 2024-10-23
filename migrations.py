@@ -7,58 +7,72 @@ def add_missing_columns():
     with app.app_context():
         # Add columns if they don't exist
         with db.engine.connect() as conn:
-            # Add language_preference to user table
+            # Add loyalty points and last daily reward to user table
             conn.execute(text("""
                 ALTER TABLE "user"
-                ADD COLUMN IF NOT EXISTS language_preference VARCHAR(10) DEFAULT 'en';
+                ADD COLUMN IF NOT EXISTS loyalty_points INTEGER DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS last_daily_reward TIMESTAMP;
             """))
             
-            # Add scheduled_for to stream_session table
-            conn.execute(text("""
-                ALTER TABLE stream_session 
-                ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP,
-                ADD COLUMN IF NOT EXISTS recording_url VARCHAR(200);
-            """))
-            
-            # Add view_count and other analytics columns to product table
+            # Add AR model URL and category to product table
             conn.execute(text("""
                 ALTER TABLE product 
-                ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0,
-                ADD COLUMN IF NOT EXISTS previous_price FLOAT,
-                ADD COLUMN IF NOT EXISTS last_price_change TIMESTAMP;
+                ADD COLUMN IF NOT EXISTS ar_model_url VARCHAR(200),
+                ADD COLUMN IF NOT EXISTS category VARCHAR(50);
             """))
             
-            # Add votes_count to question table
+            # Create badge table
             conn.execute(text("""
-                ALTER TABLE question
-                ADD COLUMN IF NOT EXISTS votes_count INTEGER DEFAULT 0;
-            """))
-            
-            # Add status column to poll table
-            conn.execute(text("""
-                ALTER TABLE poll
-                ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
-            """))
-            
-            # Ensure view_history table exists
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS view_history (
+                CREATE TABLE IF NOT EXISTS badge (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER REFERENCES "user"(id),
-                    product_id INTEGER REFERENCES product(id),
-                    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    name VARCHAR(50) NOT NULL,
+                    description VARCHAR(200),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """))
             
-            # Ensure price_alert table exists
+            # Create flash sale table
             conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS price_alert (
+                CREATE TABLE IF NOT EXISTS flash_sale (
+                    id SERIAL PRIMARY KEY,
+                    stream_id INTEGER REFERENCES stream_session(id),
+                    product_id INTEGER REFERENCES product(id),
+                    discount_percentage INTEGER NOT NULL,
+                    start_time TIMESTAMP NOT NULL,
+                    end_time TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            
+            # Create wishlist table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS wishlist (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER REFERENCES "user"(id),
                     product_id INTEGER REFERENCES product(id),
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+            
+            # Create group buying tables
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS group_buying (
+                    id SERIAL PRIMARY KEY,
+                    product_id INTEGER REFERENCES product(id),
                     target_price FLOAT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    active BOOLEAN DEFAULT TRUE
+                    min_buyers INTEGER NOT NULL,
+                    current_buyers INTEGER DEFAULT 0,
+                    status VARCHAR(20) DEFAULT 'active',
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE TABLE IF NOT EXISTS group_buying_participant (
+                    id SERIAL PRIMARY KEY,
+                    group_buying_id INTEGER REFERENCES group_buying(id),
+                    user_id INTEGER REFERENCES "user"(id),
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """))
             
