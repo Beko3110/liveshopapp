@@ -24,6 +24,20 @@
   letter-spacing: 0.5px;
 }
 
+/* Theme Switch Styles */
+.form-switch {
+  padding-left: 2.5em;
+}
+
+.form-check-input {
+  cursor: pointer;
+}
+
+.theme-icon {
+  font-size: 1.2rem;
+  color: var(--bs-navbar-color);
+}
+
 /* Card Enhancements */
 .card {
   border: none;
