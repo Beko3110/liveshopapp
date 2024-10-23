@@ -33,9 +33,26 @@ async function startStream() {
         await peerConnection.setLocalDescription(offer);
         
         socket.emit('offer', offer);
+
+        // Show stop button after starting stream
+        document.getElementById('startStream').style.display = 'none';
+        document.getElementById('stopStream').style.display = 'inline-block';
     } catch (error) {
         console.error('Error starting stream:', error);
     }
+}
+
+// Stop stream function
+function stopStream() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        document.getElementById('localVideo').srcObject = null;
+    }
+    if (peerConnection) {
+        peerConnection.close();
+    }
+    document.getElementById('startStream').style.display = 'inline-block';
+    document.getElementById('stopStream').style.display = 'none';
 }
 
 // Join stream (for viewers)
@@ -72,10 +89,14 @@ socket.on('ice_candidate', async candidate => {
     }
 });
 
-// Initialize start stream button if it exists
+// Initialize buttons when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     const startStreamBtn = document.getElementById('startStream');
+    const stopStreamBtn = document.getElementById('stopStream');
     if (startStreamBtn) {
         startStreamBtn.addEventListener('click', startStream);
+    }
+    if (stopStreamBtn) {
+        stopStreamBtn.addEventListener('click', stopStream);
     }
 });

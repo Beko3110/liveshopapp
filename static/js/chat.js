@@ -3,6 +3,7 @@ import socket from './socket-client.js';
 
 const chatMessages = document.getElementById('chat-messages');
 const messageForm = document.getElementById('message-form');
+const ROOM_ID = document.getElementById('stream-container').dataset.roomId;
 
 // Send chat message
 messageForm.addEventListener('submit', e => {
@@ -13,7 +14,7 @@ messageForm.addEventListener('submit', e => {
     if (message) {
         socket.emit('chat_message', {
             message: message,
-            room: ROOM_ID // Defined in template
+            room: ROOM_ID
         });
         input.value = '';
     }

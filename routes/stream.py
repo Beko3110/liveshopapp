@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app import db, socketio
+from flask_socketio import join_room
 from models import StreamSession, Product, User
 
 stream_bp = Blueprint('stream', __name__)
@@ -32,7 +33,7 @@ def room(stream_id):
 @socketio.on('join_room')
 def on_join(data):
     room = data['room']
-    socketio.join_room(room)
+    join_room(room)
 
 @socketio.on('chat_message')
 def on_chat_message(data):

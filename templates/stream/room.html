@@ -6,12 +6,15 @@
         <div class="card">
             <div class="card-body">
                 <h3>{{ stream.title }}</h3>
-                {% if session.get('is_seller') %}
-                <video id="localVideo" autoplay playsinline class="w-100"></video>
-                <button id="startStream" class="btn btn-primary mt-2">Start Stream</button>
-                {% else %}
-                <video id="remoteVideo" autoplay playsinline class="w-100"></video>
-                {% endif %}
+                <div id="stream-container" data-room-id="{{ stream.id }}">
+                    {% if session.get('is_seller') %}
+                    <video id="localVideo" autoplay playsinline class="w-100"></video>
+                    <button id="startStream" class="btn btn-primary mt-2">Start Stream</button>
+                    <button id="stopStream" class="btn btn-danger mt-2 ms-2" style="display: none;">Stop Stream</button>
+                    {% else %}
+                    <video id="remoteVideo" autoplay playsinline class="w-100"></video>
+                    {% endif %}
+                </div>
             </div>
         </div>
         
@@ -55,9 +58,6 @@
 </div>
 
 {% block scripts %}
-<script>
-    const ROOM_ID = "{{ stream.id }}";
-</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script type="module" src="{{ url_for('static', filename='js/socket-client.js') }}"></script>
 <script type="module" src="{{ url_for('static', filename='js/stream.js') }}"></script>
