@@ -34,6 +34,12 @@ def add_missing_columns():
                 ADD COLUMN IF NOT EXISTS votes_count INTEGER DEFAULT 0;
             """))
             
+            # Add status column to poll table
+            conn.execute(text("""
+                ALTER TABLE poll
+                ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+            """))
+            
             # Ensure view_history table exists
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS view_history (

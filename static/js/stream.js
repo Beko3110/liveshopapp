@@ -10,7 +10,6 @@ const configuration = {
 
 let localStream;
 let peerConnection;
-const streamContainer = document.getElementById('stream-container');
 
 // Start stream (for sellers)
 async function startStream() {
@@ -97,6 +96,7 @@ socket.on('ice_candidate', async data => {
 
 // Initialize buttons when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    const streamContainer = document.getElementById('stream-container');
     if (!streamContainer) return;
     
     const startStreamBtn = document.getElementById('startStream');
