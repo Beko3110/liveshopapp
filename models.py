@@ -9,6 +9,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(256))
     is_seller = db.Column(db.Boolean, default=False)
     products = db.relationship('Product', backref='seller', lazy=True)
+    streams = db.relationship('StreamSession', backref='seller', lazy=True)
     
     def __init__(self, username, email, is_seller=False):
         self.username = username
@@ -47,6 +48,7 @@ class Order(db.Model):
     total_amount = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    product = db.relationship('Product', backref='orders', lazy=True)
 
 class StreamSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)

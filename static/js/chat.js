@@ -1,4 +1,6 @@
-const socket = io();
+// Import shared socket instance
+import socket from './socket-client.js';
+
 const chatMessages = document.getElementById('chat-messages');
 const messageForm = document.getElementById('message-form');
 

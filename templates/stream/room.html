@@ -58,6 +58,7 @@
     const ROOM_ID = "{{ stream.id }}";
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-<script src="{{ url_for('static', filename='js/stream.js') }}"></script>
-<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/socket-client.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/stream.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/chat.js') }}"></script>
 {% endblock %}

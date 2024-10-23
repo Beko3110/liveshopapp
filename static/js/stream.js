@@ -1,3 +1,6 @@
+// Import shared socket instance
+import socket from './socket-client.js';
+
 // WebRTC configuration
 const configuration = {
     iceServers: [
@@ -7,7 +10,6 @@ const configuration = {
 
 let localStream;
 let peerConnection;
-const socket = io();
 
 // Start stream (for sellers)
 async function startStream() {
@@ -67,5 +69,13 @@ socket.on('ice_candidate', async candidate => {
         await peerConnection.addIceCandidate(candidate);
     } catch (error) {
         console.error('Error adding ICE candidate:', error);
+    }
+});
+
+// Initialize start stream button if it exists
+document.addEventListener('DOMContentLoaded', () => {
+    const startStreamBtn = document.getElementById('startStream');
+    if (startStreamBtn) {
+        startStreamBtn.addEventListener('click', startStream);
     }
 });
