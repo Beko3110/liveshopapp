@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <!-- Active Streams Section -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Live Streams from Sellers You Follow</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% if active_streams %}
+                            {% for stream in active_streams %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ stream.title }}</h5>
+                                        <p class="text-muted">By: {{ stream.seller.username }}</p>
+                                        <p class="card-text">
+                                            Started: {{ stream.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                        </p>
+                                        <a href="{{ url_for('stream.room', stream_id=stream.id) }}" class="btn btn-primary">
+                                            Join Stream
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="col-12">
+                                <p class="text-muted">No active streams from sellers you follow.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Latest Products Section -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">New Products from Sellers You Follow</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% if latest_products %}
+                            {% for product in latest_products %}
+                            <div class="col-md-3 mb-3">
+                                <div class="card h-100">
+                                    <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.name }}">
+                                    <div class="card-body">
+                                        <h5 class="card-title">{{ product.name }}</h5>
+                                        <p class="text-muted">By: {{ product.seller.username }}</p>
+                                        <p class="card-text">${{ "%.2f"|format(product.price) }}</p>
+                                        <a href="{{ url_for('products.list') }}#product-{{ product.id }}" class="btn btn-primary">View Details</a>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="col-12">
+                                <p class="text-muted">No new products from sellers you follow.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Feed Section -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Recent Activity</h4>
+                </div>
+                <div class="card-body">
+                    <div class="activity-feed">
+                        {% if activities %}
+                            {% for activity in activities %}
+                            <div class="activity-item mb-3 p-3 border-bottom">
+                                {% if activity.activity_type == 'stream_start' %}
+                                    <i class="bi bi-camera-video-fill text-primary"></i>
+                                    <strong>{{ activity.user.username }}</strong> started a new stream
+                                {% elif activity.activity_type == 'new_product' %}
+                                    <i class="bi bi-bag-plus-fill text-success"></i>
+                                    <strong>{{ activity.user.username }}</strong> added a new product
+                                {% elif activity.activity_type == 'follow' %}
+                                    <i class="bi bi-person-plus-fill text-info"></i>
+                                    <strong>{{ activity.user.username }}</strong> followed a new seller
+                                {% endif %}
+                                <small class="text-muted d-block mt-1">
+                                    {{ activity.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                </small>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted">No recent activity from sellers you follow.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

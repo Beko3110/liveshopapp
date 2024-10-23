@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title">{{ seller.username }}</h3>
+                    <p class="text-muted">Seller Profile</p>
+                    
+                    {% if session.get('user_id') and session.get('user_id') != seller.id %}
+                        {% if is_following %}
+                        <form action="{{ url_for('social.unfollow', user_id=seller.id) }}" method="POST">
+                            <button type="submit" class="btn btn-secondary">
+                                <i class="bi bi-person-dash-fill"></i> Unfollow
+                            </button>
+                        </form>
+                        {% else %}
+                        <form action="{{ url_for('social.follow', user_id=seller.id) }}" method="POST">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-person-plus-fill"></i> Follow
+                            </button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                    
+                    <div class="mt-3">
+                        <p><strong>Followers:</strong> {{ seller.followers.count() }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            {% if active_streams %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Active Streams</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for stream in active_streams %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ stream.title }}</h5>
+                                    <p class="card-text text-muted">Started: {{ stream.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                                    <a href="{{ url_for('stream.room', stream_id=stream.id) }}" class="btn btn-primary">
+                                        Join Stream
+                                    </a>
+                                    
+                                    <!-- Social Share Buttons -->
+                                    <div class="mt-3">
+                                        <button class="btn btn-sm btn-outline-primary share-btn" data-type="stream" data-id="{{ stream.id }}" data-title="{{ stream.title }}">
+                                            <i class="bi bi-share"></i> Share
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="card">
+                <div class="card-header">
+                    <h4>Products</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for product in products %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100">
+                                <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.name }}">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ product.name }}</h5>
+                                    <p class="card-text">${{ "%.2f"|format(product.price) }}</p>
+                                    <a href="{{ url_for('products.list') }}#product-{{ product.id }}" class="btn btn-primary">View Details</a>
+                                    
+                                    <!-- Social Share Buttons -->
+                                    <div class="mt-3">
+                                        <button class="btn btn-sm btn-outline-primary share-btn" data-type="product" data-id="{{ product.id }}" data-title="{{ product.name }}">
+                                            <i class="bi bi-share"></i> Share
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const shareButtons = document.querySelectorAll('.share-btn');
+    
+    shareButtons.forEach(button => {
+        button.addEventListener('click', async () => {
+            const type = button.dataset.type;
+            const id = button.dataset.id;
+            const title = button.dataset.title;
+            const url = window.location.origin + 
+                       (type === 'stream' ? 
+                        '/stream/' + id :
+                        '/products#product-' + id);
+            
+            try {
+                if (navigator.share) {
+                    await navigator.share({
+                        title: title,
+                        url: url
+                    });
+                } else {
+                    // Fallback: Copy to clipboard
+                    await navigator.clipboard.writeText(url);
+                    button.textContent = 'Copied!';
+                    setTimeout(() => {
+                        button.innerHTML = '<i class="bi bi-share"></i> Share';
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error('Error sharing:', err);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

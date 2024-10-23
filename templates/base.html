@@ -33,6 +33,13 @@
                             Products
                         </a>
                     </li>
+                    {% if session.get('user_id') %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'social.activity_feed' %}active{% endif %}" href="{{ url_for('social.activity_feed') }}">
+                            <i class="bi bi-activity"></i> Activity Feed
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if session.get('is_seller') %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'products.manage' %}active{% endif %}" href="{{ url_for('products.manage') }}">

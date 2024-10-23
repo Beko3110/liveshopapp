@@ -10,6 +10,8 @@ const configuration = {
 
 let localStream;
 let peerConnection;
+const streamContainer = document.getElementById('stream-container');
+const roomId = streamContainer ? streamContainer.dataset.roomId : null;
 
 // Start stream (for sellers)
 async function startStream() {
@@ -25,14 +27,14 @@ async function startStream() {
         
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
-                socket.emit('ice_candidate', event.candidate);
+                socket.emit('ice_candidate', { candidate: event.candidate, room: roomId });
             }
         };
         
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         
-        socket.emit('offer', offer);
+        socket.emit('offer', { offer, room: roomId });
 
         // Show stop button after starting stream
         document.getElementById('startStream').style.display = 'none';
@@ -53,10 +55,13 @@ function stopStream() {
     }
     document.getElementById('startStream').style.display = 'inline-block';
     document.getElementById('stopStream').style.display = 'none';
+    
+    // Notify server that stream has ended
+    socket.emit('stream_ended', { room: roomId });
 }
 
 // Join stream (for viewers)
-socket.on('offer', async offer => {
+socket.on('offer', async data => {
     try {
         peerConnection = new RTCPeerConnection(configuration);
         
@@ -66,24 +71,26 @@ socket.on('offer', async offer => {
         
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
-                socket.emit('ice_candidate', event.candidate);
+                socket.emit('ice_candidate', { candidate: event.candidate, room: roomId });
             }
         };
         
-        await peerConnection.setRemoteDescription(offer);
+        await peerConnection.setRemoteDescription(data.offer);
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
         
-        socket.emit('answer', answer);
+        socket.emit('answer', { answer, room: roomId });
     } catch (error) {
         console.error('Error joining stream:', error);
     }
 });
 
 // Handle ICE candidates
-socket.on('ice_candidate', async candidate => {
+socket.on('ice_candidate', async data => {
     try {
-        await peerConnection.addIceCandidate(candidate);
+        if (peerConnection) {
+            await peerConnection.addIceCandidate(data.candidate);
+        }
     } catch (error) {
         console.error('Error adding ICE candidate:', error);
     }
@@ -91,12 +98,18 @@ socket.on('ice_candidate', async candidate => {
 
 // Initialize buttons when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    if (!streamContainer) return;
+    
     const startStreamBtn = document.getElementById('startStream');
     const stopStreamBtn = document.getElementById('stopStream');
+    
     if (startStreamBtn) {
         startStreamBtn.addEventListener('click', startStream);
     }
     if (stopStreamBtn) {
         stopStreamBtn.addEventListener('click', stopStream);
     }
+    
+    // Join room on connection
+    socket.emit('join_room', { room: roomId });
 });
