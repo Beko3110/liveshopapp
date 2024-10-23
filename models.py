@@ -10,6 +10,11 @@ class User(db.Model):
     is_seller = db.Column(db.Boolean, default=False)
     products = db.relationship('Product', backref='seller', lazy=True)
     
+    def __init__(self, username, email, is_seller=False):
+        self.username = username
+        self.email = email
+        self.is_seller = is_seller
+    
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
     
@@ -25,6 +30,14 @@ class Product(db.Model):
     stock = db.Column(db.Integer, default=0)
     seller_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __init__(self, name, description, price, stock, image_url, seller_id):
+        self.name = name
+        self.description = description
+        self.price = price
+        self.stock = stock
+        self.image_url = image_url
+        self.seller_id = seller_id
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)

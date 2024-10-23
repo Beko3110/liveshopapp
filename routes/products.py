@@ -43,3 +43,53 @@ def create():
         return redirect(url_for('products.manage'))
         
     return render_template('products/form.html')
+
+@products_bp.route('/products/populate-sample')
+def populate_sample():
+    # Create a sample seller if none exists
+    seller = User.query.filter_by(username='sample_seller').first()
+    if not seller:
+        seller = User(
+            username='sample_seller',
+            email='seller@example.com',
+            is_seller=True
+        )
+        seller.set_password('password123')
+        db.session.add(seller)
+        db.session.commit()
+
+    # Sample products data
+    sample_products = [
+        {
+            'name': 'Smart Watch',
+            'description': 'Latest generation smartwatch with fitness tracking and notifications',
+            'price': 199.99,
+            'stock': 50,
+            'image_url': 'https://placehold.co/600x400?text=Smart+Watch'
+        },
+        {
+            'name': 'Wireless Earbuds',
+            'description': 'Premium wireless earbuds with noise cancellation',
+            'price': 149.99,
+            'stock': 100,
+            'image_url': 'https://placehold.co/600x400?text=Wireless+Earbuds'
+        },
+        {
+            'name': 'Gaming Laptop',
+            'description': 'High-performance gaming laptop with RTX graphics',
+            'price': 1299.99,
+            'stock': 25,
+            'image_url': 'https://placehold.co/600x400?text=Gaming+Laptop'
+        }
+    ]
+
+    # Add products to database
+    for product_data in sample_products:
+        product = Product.query.filter_by(name=product_data['name']).first()
+        if not product:
+            product = Product(**product_data, seller_id=seller.id)
+            db.session.add(product)
+
+    db.session.commit()
+    flash('Sample products have been added to the database')
+    return redirect(url_for('products.list'))
