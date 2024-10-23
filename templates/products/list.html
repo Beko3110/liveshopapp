@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    {% for product in products %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.name }}">
+            <div class="card-body">
+                <h5 class="card-title">{{ product.name }}</h5>
+                <p class="card-text">{{ product.description }}</p>
+                <p class="card-text">
+                    <strong>Price:</strong> ${{ "%.2f"|format(product.price) }}<br>
+                    <strong>Stock:</strong> {{ product.stock }}
+                </p>
+                {% if session.get('user_id') %}
+                <form action="{{ url_for('orders.create', product_id=product.id) }}" method="POST">
+                    <div class="input-group mb-3">
+                        <input type="number" name="quantity" class="form-control" value="1" min="1" max="{{ product.stock }}">
+                        <button type="submit" class="btn btn-primary">Buy Now</button>
+                    </div>
+                </form>
+                {% else %}
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Login to Buy</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
