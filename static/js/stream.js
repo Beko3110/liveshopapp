@@ -107,6 +107,24 @@ socket.on('ice_candidate', async data => {
         }
     } catch (error) {
         console.error('Error adding ICE candidate:', error);
+        showError('Error establishing connection: ' + error.message);
+    }
+});
+
+// Handle stream ended event
+socket.on('stream_ended', () => {
+    try {
+        if (peerConnection) {
+            peerConnection.close();
+        }
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) {
+            remoteVideo.srcObject = null;
+        }
+        showError('Stream has ended');
+    } catch (error) {
+        console.error('Error handling stream end:', error);
+        showError('Error handling stream end: ' + error.message);
     }
 });
 
