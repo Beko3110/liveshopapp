@@ -8,6 +8,7 @@ const configuration = {
     ]
 };
 
+// Stream state variables
 let localStream;
 let peerConnection;
 
