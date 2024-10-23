@@ -24,18 +24,64 @@
   letter-spacing: 0.5px;
 }
 
-/* Theme Switch Styles */
-.form-switch {
-  padding-left: 2.5em;
+/* Theme Switch Enhancement */
+.theme-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    margin: 0 1rem;
 }
 
-.form-check-input {
-  cursor: pointer;
+.theme-switch .form-check-input {
+    width: 3rem;
+    height: 1.5rem;
+    margin: 0;
+    cursor: pointer;
+    background-color: var(--bs-gray-700);
+    border-color: var(--bs-gray-600);
 }
 
-.theme-icon {
-  font-size: 1.2rem;
-  color: var(--bs-navbar-color);
+.theme-switch .form-check-input:checked {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+.theme-switch .form-check-label {
+    margin-left: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.light-icon, .dark-icon {
+    font-size: 1.2rem;
+    transition: var(--custom-transition);
+}
+
+.light-icon {
+    color: var(--bs-warning);
+    display: none;
+}
+
+.dark-icon {
+    color: var(--bs-info);
+}
+
+[data-bs-theme='light'] .light-icon {
+    display: inline-block;
+}
+
+[data-bs-theme='light'] .dark-icon {
+    display: none;
+}
+
+[data-bs-theme='dark'] .light-icon {
+    display: none;
+}
+
+[data-bs-theme='dark'] .dark-icon {
+    display: inline-block;
 }
 
 /* Card Enhancements */
