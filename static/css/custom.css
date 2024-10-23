@@ -12,22 +12,20 @@
     --custom-bg: #f8f9fa;
     --custom-card-bg: #ffffff;
     --custom-nav-bg: #ffffff;
+    --text-color: #212529;
 }
 
 [data-bs-theme='dark'] {
     --custom-bg: #1a1d20;
     --custom-card-bg: #212529;
     --custom-nav-bg: #212529;
+    --text-color: #ffffff;
 }
 
 body {
     background-color: var(--custom-bg);
     transition: background-color var(--custom-transition);
-}
-
-/* Layout & Spacing */
-.container {
-  padding: 2rem 1rem;
+    color: var(--text-color);
 }
 
 /* Navigation Bar Enhancement */
@@ -40,6 +38,11 @@ body {
 .navbar-brand {
   font-weight: 600;
   letter-spacing: 0.5px;
+}
+
+.navbar-nav .nav-link,
+.form-check-label {
+    color: var(--text-color) !important;
 }
 
 /* Theme Switch Enhancement */
@@ -112,6 +115,7 @@ body {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   transition: var(--custom-transition);
   margin-bottom: 1.5rem;
+  color: var(--text-color);
 }
 
 .card:hover {
@@ -179,6 +183,13 @@ video {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.5rem;
   padding: 1rem 0;
+}
+
+/* Seller Info */
+.seller-info {
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--bs-border-color);
 }
 
 /* Animations */

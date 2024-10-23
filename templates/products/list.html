@@ -11,7 +11,24 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title">{{ stream.title }}</h5>
-                        <p class="card-text text-muted">By: {{ stream.seller.username }}</p>
+                        <p class="card-text text-muted">
+                            By: <a href="{{ url_for('social.seller_profile', user_id=stream.seller.id) }}">{{ stream.seller.username }}</a>
+                            {% if session.get('user_id') and session.get('user_id') != stream.seller.id %}
+                                {% if current_user and current_user.is_following(stream.seller) %}
+                                <form action="{{ url_for('social.unfollow', user_id=stream.seller.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-person-dash-fill"></i> Unfollow
+                                    </button>
+                                </form>
+                                {% else %}
+                                <form action="{{ url_for('social.follow', user_id=stream.seller.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-person-plus-fill"></i> Follow
+                                    </button>
+                                </form>
+                                {% endif %}
+                            {% endif %}
+                        </p>
                         <a href="{{ url_for('stream.room', stream_id=stream.id) }}" class="btn btn-primary w-100">Join Stream</a>
                     </div>
                 </div>
@@ -34,12 +51,32 @@
     <h3 class="mb-4">Products</h3>
     <div class="product-grid">
         {% for product in products %}
-        <div class="card h-100">
+        <div class="card h-100" id="product-{{ product.id }}">
             <img src="{{ product.image_url }}" class="card-img-top" alt="{{ product.name }}" loading="lazy">
             <div class="card-body d-flex flex-column">
                 <h5 class="card-title">{{ product.name }}</h5>
                 <p class="card-text flex-grow-1">{{ product.description }}</p>
-                <div class="product-details mt-3">
+                <div class="seller-info mb-3">
+                    <p class="mb-2">
+                        Seller: <a href="{{ url_for('social.seller_profile', user_id=product.seller.id) }}">{{ product.seller.username }}</a>
+                    </p>
+                    {% if session.get('user_id') and session.get('user_id') != product.seller.id %}
+                        {% if current_user and current_user.is_following(product.seller) %}
+                        <form action="{{ url_for('social.unfollow', user_id=product.seller.id) }}" method="POST" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-person-dash-fill"></i> Unfollow
+                            </button>
+                        </form>
+                        {% else %}
+                        <form action="{{ url_for('social.follow', user_id=product.seller.id) }}" method="POST" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-person-plus-fill"></i> Follow
+                            </button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="product-details">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="h5 mb-0">${{ "%.2f"|format(product.price) }}</span>
                         <span class="badge bg-secondary">Stock: {{ product.stock }}</span>

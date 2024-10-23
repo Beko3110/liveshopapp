@@ -9,7 +9,11 @@ products_bp = Blueprint('products', __name__)
 def list():
     products = Product.query.all()
     active_streams = StreamSession.query.filter_by(status='active').all()
-    return render_template('products/list.html', products=products, active_streams=active_streams)
+    current_user = User.query.get(session.get('user_id')) if session.get('user_id') else None
+    return render_template('products/list.html', 
+                         products=products, 
+                         active_streams=active_streams,
+                         current_user=current_user)
 
 @products_bp.route('/products/manage')
 def manage():
