@@ -28,6 +28,12 @@ def add_missing_columns():
                 ADD COLUMN IF NOT EXISTS last_price_change TIMESTAMP;
             """))
             
+            # Add votes_count to question table
+            conn.execute(text("""
+                ALTER TABLE question
+                ADD COLUMN IF NOT EXISTS votes_count INTEGER DEFAULT 0;
+            """))
+            
             # Ensure view_history table exists
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS view_history (

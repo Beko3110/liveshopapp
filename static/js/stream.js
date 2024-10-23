@@ -1,5 +1,5 @@
-// Import shared socket instance
-import socket from './socket-client.js';
+// Import shared socket instance and ROOM_ID
+import socket, { ROOM_ID } from './socket-client.js';
 
 // WebRTC configuration
 const configuration = {
@@ -11,7 +11,6 @@ const configuration = {
 let localStream;
 let peerConnection;
 const streamContainer = document.getElementById('stream-container');
-const roomId = streamContainer ? streamContainer.dataset.roomId : null;
 
 // Start stream (for sellers)
 async function startStream() {
@@ -27,14 +26,14 @@ async function startStream() {
         
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
-                socket.emit('ice_candidate', { candidate: event.candidate, room: roomId });
+                socket.emit('ice_candidate', { candidate: event.candidate, room: ROOM_ID });
             }
         };
         
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
         
-        socket.emit('offer', { offer, room: roomId });
+        socket.emit('offer', { offer, room: ROOM_ID });
 
         // Show stop button after starting stream
         document.getElementById('startStream').style.display = 'none';
@@ -57,7 +56,7 @@ function stopStream() {
     document.getElementById('stopStream').style.display = 'none';
     
     // Notify server that stream has ended
-    socket.emit('stream_ended', { room: roomId });
+    socket.emit('stream_ended', { room: ROOM_ID });
 }
 
 // Join stream (for viewers)
@@ -71,7 +70,7 @@ socket.on('offer', async data => {
         
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
-                socket.emit('ice_candidate', { candidate: event.candidate, room: roomId });
+                socket.emit('ice_candidate', { candidate: event.candidate, room: ROOM_ID });
             }
         };
         
@@ -79,7 +78,7 @@ socket.on('offer', async data => {
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
         
-        socket.emit('answer', { answer, room: roomId });
+        socket.emit('answer', { answer, room: ROOM_ID });
     } catch (error) {
         console.error('Error joining stream:', error);
     }
@@ -111,5 +110,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Join room on connection
-    socket.emit('join_room', { room: roomId });
+    socket.emit('join_room', { room: ROOM_ID });
 });
