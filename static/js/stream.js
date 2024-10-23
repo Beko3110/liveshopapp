@@ -39,23 +39,38 @@ async function startStream() {
         document.getElementById('stopStream').style.display = 'inline-block';
     } catch (error) {
         console.error('Error starting stream:', error);
+        showError('Failed to start stream: ' + error.message);
     }
+}
+
+// Show error message function
+function showError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'alert alert-danger';
+    errorDiv.textContent = message;
+    document.getElementById('stream-container').prepend(errorDiv);
+    setTimeout(() => errorDiv.remove(), 5000);
 }
 
 // Stop stream function
 function stopStream() {
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        document.getElementById('localVideo').srcObject = null;
+    try {
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            document.getElementById('localVideo').srcObject = null;
+        }
+        if (peerConnection) {
+            peerConnection.close();
+        }
+        document.getElementById('startStream').style.display = 'inline-block';
+        document.getElementById('stopStream').style.display = 'none';
+        
+        // Notify server that stream has ended
+        socket.emit('stream_ended', { room: ROOM_ID });
+    } catch (error) {
+        console.error('Error stopping stream:', error);
+        showError('Failed to stop stream: ' + error.message);
     }
-    if (peerConnection) {
-        peerConnection.close();
-    }
-    document.getElementById('startStream').style.display = 'inline-block';
-    document.getElementById('stopStream').style.display = 'none';
-    
-    // Notify server that stream has ended
-    socket.emit('stream_ended', { room: ROOM_ID });
 }
 
 // Join stream (for viewers)
@@ -80,6 +95,7 @@ socket.on('offer', async data => {
         socket.emit('answer', { answer, room: ROOM_ID });
     } catch (error) {
         console.error('Error joining stream:', error);
+        showError('Failed to join stream: ' + error.message);
     }
 });
 
