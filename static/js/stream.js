@@ -11,11 +11,28 @@ const configuration = {
 let localStream;
 let peerConnection;
 
+// Show error message function
+function showError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'alert alert-danger';
+    errorDiv.textContent = message;
+    document.getElementById('stream-container').prepend(errorDiv);
+    setTimeout(() => errorDiv.remove(), 5000);
+}
+
 // Start stream (for sellers)
 async function startStream() {
     try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Media devices not supported in your browser');
+        }
+        
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('localVideo').srcObject = localStream;
+        const localVideo = document.getElementById('localVideo');
+        if (!localVideo) {
+            throw new Error('Local video element not found');
+        }
+        localVideo.srcObject = localStream;
         
         peerConnection = new RTCPeerConnection(configuration);
         
@@ -28,6 +45,12 @@ async function startStream() {
                 socket.emit('ice_candidate', { candidate: event.candidate, room: ROOM_ID });
             }
         };
+
+        peerConnection.onconnectionstatechange = () => {
+            if (peerConnection.connectionState === 'failed') {
+                showError('Connection failed. Please try rejoining the stream.');
+            }
+        };
         
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
@@ -35,21 +58,16 @@ async function startStream() {
         socket.emit('offer', { offer, room: ROOM_ID });
 
         // Show stop button after starting stream
-        document.getElementById('startStream').style.display = 'none';
-        document.getElementById('stopStream').style.display = 'inline-block';
+        const startButton = document.getElementById('startStream');
+        const stopButton = document.getElementById('stopStream');
+        if (startButton && stopButton) {
+            startButton.style.display = 'none';
+            stopButton.style.display = 'inline-block';
+        }
     } catch (error) {
         console.error('Error starting stream:', error);
         showError('Failed to start stream: ' + error.message);
     }
-}
-
-// Show error message function
-function showError(message) {
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'alert alert-danger';
-    errorDiv.textContent = message;
-    document.getElementById('stream-container').prepend(errorDiv);
-    setTimeout(() => errorDiv.remove(), 5000);
 }
 
 // Stop stream function
@@ -57,13 +75,21 @@ function stopStream() {
     try {
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
-            document.getElementById('localVideo').srcObject = null;
+            const localVideo = document.getElementById('localVideo');
+            if (localVideo) {
+                localVideo.srcObject = null;
+            }
         }
         if (peerConnection) {
             peerConnection.close();
         }
-        document.getElementById('startStream').style.display = 'inline-block';
-        document.getElementById('stopStream').style.display = 'none';
+        
+        const startButton = document.getElementById('startStream');
+        const stopButton = document.getElementById('stopStream');
+        if (startButton && stopButton) {
+            startButton.style.display = 'inline-block';
+            stopButton.style.display = 'none';
+        }
         
         // Notify server that stream has ended
         socket.emit('stream_ended', { room: ROOM_ID });
@@ -79,12 +105,22 @@ socket.on('offer', async data => {
         peerConnection = new RTCPeerConnection(configuration);
         
         peerConnection.ontrack = event => {
-            document.getElementById('remoteVideo').srcObject = event.streams[0];
+            const remoteVideo = document.getElementById('remoteVideo');
+            if (!remoteVideo) {
+                throw new Error('Remote video element not found');
+            }
+            remoteVideo.srcObject = event.streams[0];
         };
         
         peerConnection.onicecandidate = event => {
             if (event.candidate) {
                 socket.emit('ice_candidate', { candidate: event.candidate, room: ROOM_ID });
+            }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+            if (peerConnection.connectionState === 'failed') {
+                showError('Connection failed. Please try rejoining the stream.');
             }
         };
         
@@ -102,7 +138,7 @@ socket.on('offer', async data => {
 // Handle ICE candidates
 socket.on('ice_candidate', async data => {
     try {
-        if (peerConnection) {
+        if (peerConnection && data.candidate) {
             await peerConnection.addIceCandidate(data.candidate);
         }
     } catch (error) {
@@ -125,6 +161,18 @@ socket.on('stream_ended', () => {
     } catch (error) {
         console.error('Error handling stream end:', error);
         showError('Error handling stream end: ' + error.message);
+    }
+});
+
+// Handle answer from viewer
+socket.on('answer', async data => {
+    try {
+        if (peerConnection && data.answer) {
+            await peerConnection.setRemoteDescription(data.answer);
+        }
+    } catch (error) {
+        console.error('Error setting remote description:', error);
+        showError('Error establishing connection: ' + error.message);
     }
 });
 
