@@ -18,10 +18,13 @@ def add_missing_columns():
             conn.execute(text("""
                 ALTER TABLE product 
                 ADD COLUMN IF NOT EXISTS ar_model_url VARCHAR(200),
-                ADD COLUMN IF NOT EXISTS category VARCHAR(50);
+                ADD COLUMN IF NOT EXISTS category VARCHAR(50),
+                ADD COLUMN IF NOT EXISTS view_count INTEGER DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS previous_price FLOAT,
+                ADD COLUMN IF NOT EXISTS last_price_change TIMESTAMP;
             """))
             
-            # Create badge table
+            # Create badge table if not exists
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS badge (
                     id SERIAL PRIMARY KEY,
@@ -32,7 +35,7 @@ def add_missing_columns():
                 );
             """))
             
-            # Create flash sale table
+            # Create flash sale table if not exists
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS flash_sale (
                     id SERIAL PRIMARY KEY,
@@ -45,17 +48,18 @@ def add_missing_columns():
                 );
             """))
             
-            # Create wishlist table
+            # Create wishlist table if not exists
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS wishlist (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER REFERENCES "user"(id),
                     product_id INTEGER REFERENCES product(id),
-                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_id, product_id)
                 );
             """))
             
-            # Create group buying tables
+            # Create group buying tables if not exists
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS group_buying (
                     id SERIAL PRIMARY KEY,
@@ -72,7 +76,8 @@ def add_missing_columns():
                     id SERIAL PRIMARY KEY,
                     group_buying_id INTEGER REFERENCES group_buying(id),
                     user_id INTEGER REFERENCES "user"(id),
-                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(group_buying_id, user_id)
                 );
             """))
             

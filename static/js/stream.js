@@ -11,6 +11,7 @@ const configuration = {
 // Stream state variables
 let localStream;
 let peerConnection;
+let connectionTimeout;
 
 // Show error message function
 function showError(message) {
@@ -50,6 +51,8 @@ async function startStream() {
         peerConnection.onconnectionstatechange = () => {
             if (peerConnection.connectionState === 'failed') {
                 showError('Connection failed. Please try rejoining the stream.');
+                // Attempt to reconnect
+                reconnectStream();
             }
         };
         
@@ -65,15 +68,41 @@ async function startStream() {
             startButton.style.display = 'none';
             stopButton.style.display = 'inline-block';
         }
+
+        // Set connection timeout
+        connectionTimeout = setTimeout(() => {
+            if (peerConnection.connectionState !== 'connected') {
+                showError('Stream connection timeout. Please try again.');
+                stopStream();
+            }
+        }, 30000); // 30 seconds timeout
     } catch (error) {
         console.error('Error starting stream:', error);
         showError('Failed to start stream: ' + error.message);
+        stopStream();
+    }
+}
+
+// Reconnect stream function
+async function reconnectStream() {
+    try {
+        if (peerConnection) {
+            peerConnection.close();
+        }
+        await startStream();
+    } catch (error) {
+        console.error('Error reconnecting stream:', error);
+        showError('Failed to reconnect: ' + error.message);
     }
 }
 
 // Stop stream function
 function stopStream() {
     try {
+        if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+        }
+
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
             const localVideo = document.getElementById('localVideo');
@@ -100,40 +129,23 @@ function stopStream() {
     }
 }
 
-// Join stream (for viewers)
-socket.on('offer', async data => {
-    try {
-        peerConnection = new RTCPeerConnection(configuration);
-        
-        peerConnection.ontrack = event => {
-            const remoteVideo = document.getElementById('remoteVideo');
-            if (!remoteVideo) {
-                throw new Error('Remote video element not found');
-            }
-            remoteVideo.srcObject = event.streams[0];
-        };
-        
-        peerConnection.onicecandidate = event => {
-            if (event.candidate) {
-                socket.emit('ice_candidate', { candidate: event.candidate, room: ROOM_ID });
-            }
-        };
-
-        peerConnection.onconnectionstatechange = () => {
-            if (peerConnection.connectionState === 'failed') {
-                showError('Connection failed. Please try rejoining the stream.');
-            }
-        };
-        
-        await peerConnection.setRemoteDescription(data.offer);
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        
-        socket.emit('answer', { answer, room: ROOM_ID });
-    } catch (error) {
-        console.error('Error joining stream:', error);
-        showError('Failed to join stream: ' + error.message);
+// Initialize buttons when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    const streamContainer = document.getElementById('stream-container');
+    if (!streamContainer) return;
+    
+    const startStreamBtn = document.getElementById('startStream');
+    const stopStreamBtn = document.getElementById('stopStream');
+    
+    if (startStreamBtn) {
+        startStreamBtn.addEventListener('click', startStream);
     }
+    if (stopStreamBtn) {
+        stopStreamBtn.addEventListener('click', stopStream);
+    }
+    
+    // Join room on connection
+    socket.emit('join_room', { room: ROOM_ID });
 });
 
 // Handle ICE candidates
@@ -151,6 +163,10 @@ socket.on('ice_candidate', async data => {
 // Handle stream ended event
 socket.on('stream_ended', () => {
     try {
+        if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+        }
+
         if (peerConnection) {
             peerConnection.close();
         }
@@ -177,21 +193,4 @@ socket.on('answer', async data => {
     }
 });
 
-// Initialize buttons when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    const streamContainer = document.getElementById('stream-container');
-    if (!streamContainer) return;
-    
-    const startStreamBtn = document.getElementById('startStream');
-    const stopStreamBtn = document.getElementById('stopStream');
-    
-    if (startStreamBtn) {
-        startStreamBtn.addEventListener('click', startStream);
-    }
-    if (stopStreamBtn) {
-        stopStreamBtn.addEventListener('click', stopStream);
-    }
-    
-    // Join room on connection
-    socket.emit('join_room', { room: ROOM_ID });
-});
+export { startStream, stopStream };
