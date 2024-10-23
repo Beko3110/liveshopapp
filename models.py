@@ -16,6 +16,7 @@ class User(db.Model):
     is_seller = db.Column(db.Boolean, default=False)
     products = db.relationship('Product', backref='seller', lazy=True)
     streams = db.relationship('StreamSession', backref='seller', lazy=True)
+    language_preference = db.Column(db.String(10), default='en')
     
     # Followers relationship
     followed = db.relationship(
@@ -58,14 +59,10 @@ class Product(db.Model):
     seller_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     reviews = db.relationship('Review', backref='product', lazy=True)
-    
-    def __init__(self, name, description, price, stock, image_url, seller_id):
-        self.name = name
-        self.description = description
-        self.price = price
-        self.stock = stock
-        self.image_url = image_url
-        self.seller_id = seller_id
+    comments = db.relationship('Comment', backref='product', lazy=True)
+    view_count = db.Column(db.Integer, default=0)
+    previous_price = db.Column(db.Float)
+    last_price_change = db.Column(db.DateTime)
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -76,6 +73,7 @@ class Order(db.Model):
     status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     product = db.relationship('Product', backref='orders', lazy=True)
+    user = db.relationship('User', backref='orders', lazy=True)
 
 class StreamSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -83,8 +81,15 @@ class StreamSession(db.Model):
     title = db.Column(db.String(100), nullable=False)
     status = db.Column(db.String(20), default='active')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    scheduled_for = db.Column(db.DateTime)
+    recording_url = db.Column(db.String(200))
     polls = db.relationship('Poll', backref='stream', lazy=True)
     questions = db.relationship('Question', backref='stream', lazy=True)
+    
+    def __init__(self, seller_id, title, scheduled_for=None):
+        self.seller_id = seller_id
+        self.title = title
+        self.scheduled_for = scheduled_for
 
 class ActivityFeed(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -92,7 +97,7 @@ class ActivityFeed(db.Model):
     activity_type = db.Column(db.String(50), nullable=False)  # 'stream_start', 'new_product', 'follow'
     target_id = db.Column(db.Integer)  # ID of the related item (stream, product, etc.)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='activities')
+    user = db.relationship('User', backref='activities', lazy=True)
 
 class Review(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -102,7 +107,7 @@ class Review(db.Model):
     comment = db.Column(db.Text)
     image_url = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='reviews')
+    user = db.relationship('User', backref='reviews', lazy=True)
 
 class Poll(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -110,7 +115,14 @@ class Poll(db.Model):
     question = db.Column(db.String(200), nullable=False)
     options = db.Column(db.JSON, nullable=False)
     votes = db.Column(db.JSON, default={})
+    status = db.Column(db.String(20), default='active')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __init__(self, stream_id, question, options, votes=None):
+        self.stream_id = stream_id
+        self.question = question
+        self.options = options
+        self.votes = votes or {}
 
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -118,6 +130,50 @@ class Question(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     question = db.Column(db.Text, nullable=False)
     answer = db.Column(db.Text)
+    votes_count = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='pending')  # pending, answered
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref='questions')
+    user = db.relationship('User', backref='questions', lazy=True)
+    
+    def __init__(self, stream_id, user_id, question):
+        self.stream_id = stream_id
+        self.user_id = user_id
+        self.question = question
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    read = db.Column(db.Boolean, default=False)
+    sender = db.relationship('User', foreign_keys=[sender_id], backref='sent_messages')
+    receiver = db.relationship('User', foreign_keys=[receiver_id], backref='received_messages')
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    parent_id = db.Column(db.Integer, db.ForeignKey('comment.id'))
+    user = db.relationship('User', backref='comments')
+    replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]))
+
+class PriceAlert(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    target_price = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    active = db.Column(db.Boolean, default=True)
+    user = db.relationship('User', backref='price_alerts')
+    product = db.relationship('Product', backref='price_alerts')
+
+class ViewHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    viewed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref='view_history')
+    product = db.relationship('Product', backref='views')

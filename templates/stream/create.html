@@ -13,10 +13,33 @@
                         <label for="title" class="form-label">Stream Title</label>
                         <input type="text" class="form-control" id="title" name="title" required>
                     </div>
-                    <button type="submit" class="btn btn-primary">Start Stream</button>
+                    <div class="mb-3">
+                        <label for="scheduled_for" class="form-label">Schedule Stream (Optional)</label>
+                        <input type="datetime-local" class="form-control" id="scheduled_for" name="scheduled_for">
+                        <small class="text-muted">Leave empty to start stream immediately</small>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="notify_followers" name="notify_followers" checked>
+                        <label class="form-check-label" for="notify_followers">
+                            Notify followers when stream starts
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Stream</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const scheduledForInput = document.getElementById('scheduled_for');
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 5); // Set minimum time to 5 minutes from now
+    const minDateTime = now.toISOString().slice(0, 16);
+    scheduledForInput.min = minDateTime;
+});
+</script>
 {% endblock %}
