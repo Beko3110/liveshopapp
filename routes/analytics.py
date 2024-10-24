@@ -1,217 +1,170 @@
 from flask import Blueprint, render_template, jsonify, session, redirect, url_for
 from app import db, socketio
 from models import StreamSession, Order, Product, User, ViewHistory
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, text
 from datetime import datetime, timedelta
 from flask_socketio import join_room, leave_room
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
 import json
 
 analytics_bp = Blueprint('analytics', __name__)
 
-# Store analytics data in memory (could be moved to Redis in production)
-stream_analytics = {}
-
-class StreamAnalytics:
+class AnalyticsManager:
     def __init__(self):
-        self.viewers = set()
-        self.active_viewers = set()
-        self.view_durations = {}
-        self.peak_viewers = 0
-        self.start_time = datetime.utcnow()
-        self.engagement_history = []
-        self.sales_history = {}
-        self.retention_data = {}
-        self.device_stats = {'desktop': 0, 'mobile': 0, 'tablet': 0}
-        self.location_stats = {}
-        self.referral_stats = {}
+        self.streams = {}
+    
+    def get_stream_analytics(self, stream_id):
+        if stream_id not in self.streams:
+            self.streams[stream_id] = {
+                'viewers': set(),
+                'active_viewers': set(),
+                'view_durations': {},
+                'peak_viewers': 0,
+                'engagement_data': [],
+                'sales_history': [],
+                'viewer_actions': [],
+                'heatmap_data': {},
+                'device_stats': {'desktop': 0, 'mobile': 0, 'tablet': 0},
+                'retention_segments': {'0-5m': 0, '5-15m': 0, '15-30m': 0, '30m+': 0}
+            }
+        return self.streams[stream_id]
 
-def get_stream_analytics(stream_id):
-    if stream_id not in stream_analytics:
-        stream_analytics[stream_id] = StreamAnalytics()
-    return stream_analytics[stream_id]
+    def track_viewer_action(self, stream_id, user_id, action_type, timestamp=None):
+        analytics = self.get_stream_analytics(stream_id)
+        timestamp = timestamp or datetime.utcnow()
+        analytics['viewer_actions'].append({
+            'user_id': user_id,
+            'action': action_type,
+            'timestamp': timestamp
+        })
+        
+        # Update heatmap data
+        minute_key = timestamp.strftime('%H:%M')
+        if minute_key not in analytics['heatmap_data']:
+            analytics['heatmap_data'][minute_key] = {'actions': 0, 'viewers': set()}
+        analytics['heatmap_data'][minute_key]['actions'] += 1
+        analytics['heatmap_data'][minute_key]['viewers'].add(user_id)
 
-def calculate_stream_metrics(stream_id):
-    analytics = get_stream_analytics(stream_id)
-    current_time = datetime.utcnow()
-    
-    # Calculate average watch time
-    total_duration = sum(
-        (current_time - start_time).total_seconds()
-        for start_time in analytics.view_durations.values()
-    )
-    avg_watch_time = total_duration / len(analytics.viewers) if analytics.viewers else 0
-    
-    # Calculate engagement rate
-    engagement_rate = (len(analytics.active_viewers) / len(analytics.viewers) * 100) if analytics.viewers else 0
-    
-    # Track retention data
-    timestamp = int(current_time.timestamp() * 1000)
-    analytics.retention_data[timestamp] = len(analytics.viewers)
-    
-    # Maintain only last hour of data
-    cutoff = timestamp - 3600000  # 1 hour in milliseconds
-    analytics.retention_data = {
-        ts: count for ts, count in analytics.retention_data.items()
-        if ts > cutoff
-    }
-    
-    # Track engagement history
-    analytics.engagement_history.append({
-        'timestamp': timestamp,
-        'rate': engagement_rate
-    })
-    
-    # Keep only last 30 minutes of engagement history
-    cutoff_time = timestamp - 1800000  # 30 minutes in milliseconds
-    analytics.engagement_history = [
-        point for point in analytics.engagement_history
-        if point['timestamp'] > cutoff_time
-    ]
-    
-    return {
-        'viewers': len(analytics.viewers),
-        'active_viewers': len(analytics.active_viewers),
-        'engagement_rate': engagement_rate,
-        'avg_watch_time': avg_watch_time,
-        'retention_data': analytics.retention_data,
-        'engagement_history': analytics.engagement_history
-    }
+    def calculate_engagement_metrics(self, stream_id):
+        analytics = self.get_stream_analytics(stream_id)
+        total_viewers = len(analytics['viewers'])
+        if total_viewers == 0:
+            return {
+                'engagement_rate': 0,
+                'avg_watch_time': 0,
+                'retention_rate': 0
+            }
+
+        active_viewers = len(analytics['active_viewers'])
+        current_time = datetime.utcnow()
+        
+        # Calculate average watch time
+        watch_times = [(current_time - start).total_seconds()
+                      for start in analytics['view_durations'].values()]
+        avg_watch_time = sum(watch_times) / len(watch_times) if watch_times else 0
+        
+        # Calculate retention rate (viewers who stayed more than 5 minutes)
+        retained_viewers = sum(1 for t in watch_times if t >= 300)
+        retention_rate = (retained_viewers / total_viewers) * 100
+        
+        # Update retention segments
+        for duration in watch_times:
+            if duration <= 300:  # 5 minutes
+                analytics['retention_segments']['0-5m'] += 1
+            elif duration <= 900:  # 15 minutes
+                analytics['retention_segments']['5-15m'] += 1
+            elif duration <= 1800:  # 30 minutes
+                analytics['retention_segments']['15-30m'] += 1
+            else:
+                analytics['retention_segments']['30m+'] += 1
+        
+        return {
+            'engagement_rate': (active_viewers / total_viewers) * 100,
+            'avg_watch_time': avg_watch_time,
+            'retention_rate': retention_rate,
+            'retention_segments': analytics['retention_segments']
+        }
+
+    def predict_best_streaming_times(self, seller_id):
+        # Get historical stream data
+        streams = StreamSession.query.filter_by(seller_id=seller_id).all()
+        if not streams:
+            return []
+        
+        stream_data = []
+        for stream in streams:
+            viewer_count = ViewHistory.query.filter_by(stream_id=stream.id).count()
+            hour = stream.created_at.hour
+            day = stream.created_at.weekday()
+            stream_data.append([hour, day, viewer_count])
+        
+        if not stream_data:
+            return []
+            
+        df = pd.DataFrame(stream_data, columns=['hour', 'day', 'viewers'])
+        
+        # Simple linear regression for prediction
+        X = df[['hour', 'day']]
+        y = df['viewers']
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        # Predict viewers for all hour/day combinations
+        predictions = []
+        for day in range(7):
+            for hour in range(24):
+                viewers = model.predict([[hour, day]])[0]
+                predictions.append({
+                    'day': day,
+                    'hour': hour,
+                    'predicted_viewers': int(viewers)
+                })
+        
+        # Sort by predicted viewers
+        predictions.sort(key=lambda x: x['predicted_viewers'], reverse=True)
+        return predictions[:5]  # Return top 5 times
+
+analytics_manager = AnalyticsManager()
 
 @socketio.on('join_room')
 def on_join(data):
     room = str(data.get('room'))
     if room and session.get('user_id'):
         join_room(room)
-        analytics = get_stream_analytics(room)
-        analytics.viewers.add(session['user_id'])
-        analytics.active_viewers.add(session['user_id'])
-        analytics.view_durations[session['user_id']] = datetime.utcnow()
+        analytics = analytics_manager.get_stream_analytics(room)
+        user_id = session['user_id']
         
-        # Update peak viewers
-        analytics.peak_viewers = max(
-            analytics.peak_viewers,
-            len(analytics.viewers)
-        )
+        analytics['viewers'].add(user_id)
+        analytics['active_viewers'].add(user_id)
+        analytics['view_durations'][user_id] = datetime.utcnow()
         
-        # Calculate and emit updated metrics
-        metrics = calculate_stream_metrics(room)
+        # Track viewer device type (from user agent)
+        user_agent = request.headers.get('User-Agent', '').lower()
+        if 'mobile' in user_agent:
+            analytics['device_stats']['mobile'] += 1
+        elif 'tablet' in user_agent:
+            analytics['device_stats']['tablet'] += 1
+        else:
+            analytics['device_stats']['desktop'] += 1
+        
+        # Track action
+        analytics_manager.track_viewer_action(room, user_id, 'join')
+        
+        # Calculate and emit metrics
+        metrics = analytics_manager.calculate_engagement_metrics(room)
         socketio.emit('analytics_update', metrics, room=room)
 
-@socketio.on('disconnect')
-def on_disconnect():
-    user_id = session.get('user_id')
-    if not user_id:
-        return
-        
-    for room, analytics in stream_analytics.items():
-        if user_id in analytics.viewers:
-            analytics.viewers.remove(user_id)
-            if user_id in analytics.active_viewers:
-                analytics.active_viewers.remove(user_id)
-            
-            # Calculate view duration
-            if user_id in analytics.view_durations:
-                start_time = analytics.view_durations.pop(user_id)
-                duration = (datetime.utcnow() - start_time).total_seconds()
-                
-                # Store view duration in database
-                stream_id = int(room)
-                view_history = ViewHistory(
-                    user_id=user_id,
-                    stream_id=stream_id,
-                    duration=duration
-                )
-                db.session.add(view_history)
-                db.session.commit()
-            
-            # Emit updated metrics
-            metrics = calculate_stream_metrics(room)
-            socketio.emit('analytics_update', metrics, room=room)
-
-@socketio.on('viewer_active')
-def on_viewer_active(data):
+@socketio.on('viewer_action')
+def on_viewer_action(data):
     room = str(data.get('room'))
-    if room and session.get('user_id'):
-        analytics = get_stream_analytics(room)
-        analytics.active_viewers.add(session['user_id'])
-        
-        metrics = calculate_stream_metrics(room)
+    action_type = data.get('action_type')
+    if room and session.get('user_id') and action_type:
+        analytics_manager.track_viewer_action(
+            room, session['user_id'], action_type)
+        metrics = analytics_manager.calculate_engagement_metrics(room)
         socketio.emit('analytics_update', metrics, room=room)
-
-@socketio.on('viewer_inactive')
-def on_viewer_inactive(data):
-    room = str(data.get('room'))
-    if room and session.get('user_id'):
-        analytics = get_stream_analytics(room)
-        if session['user_id'] in analytics.active_viewers:
-            analytics.active_viewers.remove(session['user_id'])
-        
-        metrics = calculate_stream_metrics(room)
-        socketio.emit('analytics_update', metrics, room=room)
-
-@socketio.on('order_placed')
-def on_order_placed(data):
-    room = str(data.get('room'))
-    if room and session.get('user_id'):
-        analytics = get_stream_analytics(room)
-        product_id = data.get('product_id')
-        
-        if product_id not in analytics.sales_history:
-            analytics.sales_history[product_id] = []
-        
-        analytics.sales_history[product_id].append({
-            'timestamp': datetime.utcnow(),
-            'amount': data.get('amount', 0)
-        })
-        
-        # Calculate and emit updated sales metrics
-        metrics = calculate_stream_metrics(room)
-        metrics['sales_data'] = get_sales_metrics(room)
-        socketio.emit('analytics_update', metrics, room=room)
-
-def get_sales_metrics(room):
-    analytics = get_stream_analytics(room)
-    stream = StreamSession.query.get(int(room))
-    if not stream:
-        return {}
-    
-    sales_data = {}
-    for product in stream.products:
-        # Calculate sales trend (last 10 minutes in 1-minute intervals)
-        now = datetime.utcnow()
-        trend = []
-        for i in range(10):
-            start_time = now - timedelta(minutes=10-i)
-            end_time = start_time + timedelta(minutes=1)
-            
-            period_sales = sum(
-                sale['amount']
-                for sale in analytics.sales_history.get(product.id, [])
-                if start_time <= sale['timestamp'] <= end_time
-            )
-            trend.append(period_sales)
-        
-        total_orders = len([
-            sale for sale in analytics.sales_history.get(product.id, [])
-            if (now - sale['timestamp']).total_seconds() <= 3600  # Last hour
-        ])
-        
-        total_revenue = sum(
-            sale['amount']
-            for sale in analytics.sales_history.get(product.id, [])
-            if (now - sale['timestamp']).total_seconds() <= 3600
-        )
-        
-        conversion_rate = (total_orders / len(analytics.viewers) * 100) if analytics.viewers else 0
-        
-        sales_data[product.id] = {
-            'orders': total_orders,
-            'revenue': total_revenue,
-            'conversion_rate': conversion_rate,
-            'trend': trend
-        }
-    
-    return sales_data
 
 @analytics_bp.route('/analytics/dashboard')
 def dashboard():
@@ -220,38 +173,41 @@ def dashboard():
     
     seller_id = session['user_id']
     
-    # Get sales data for last 30 days
+    # Get sales performance data
     sales_data = db.session.query(
-        func.date_trunc('day', Order.created_at).label('date'),
+        func.date_trunc('hour', Order.created_at).label('hour'),
         func.sum(Order.total_amount).label('revenue'),
         func.count(Order.id).label('orders')
     ).join(Product).filter(
         Product.seller_id == seller_id,
-        Order.created_at >= datetime.utcnow() - timedelta(days=30)
-    ).group_by('date').order_by('date').all()
+        Order.created_at >= datetime.utcnow() - timedelta(days=7)
+    ).group_by('hour').order_by('hour').all()
     
-    # Get stream performance data
-    stream_data = db.session.query(
+    # Get best streaming times prediction
+    best_times = analytics_manager.predict_best_streaming_times(seller_id)
+    
+    # Get stream performance metrics
+    stream_metrics = db.session.query(
         StreamSession.id,
         StreamSession.title,
         StreamSession.created_at,
-        StreamSession.status,
+        func.count(ViewHistory.id).label('total_viewers'),
+        func.avg(ViewHistory.duration).label('avg_watch_time'),
         func.count(Order.id).label('orders'),
         func.sum(Order.total_amount).label('revenue')
-    ).outerjoin(Order).filter(
+    ).outerjoin(ViewHistory).outerjoin(Order).filter(
         StreamSession.seller_id == seller_id
-    ).group_by(
-        StreamSession.id
-    ).order_by(
+    ).group_by(StreamSession.id).order_by(
         StreamSession.created_at.desc()
     ).all()
     
     return render_template('analytics/dashboard.html',
                          sales_data=sales_data,
-                         stream_data=stream_data)
+                         stream_metrics=stream_metrics,
+                         best_times=best_times)
 
 @analytics_bp.route('/analytics/stream/<int:stream_id>')
-def stream_analytics_view(stream_id):
+def stream_analytics(stream_id):
     if not session.get('is_seller'):
         return redirect(url_for('products.list'))
     
@@ -259,8 +215,32 @@ def stream_analytics_view(stream_id):
     if stream.seller_id != session['user_id']:
         return redirect(url_for('products.list'))
     
-    analytics = get_stream_analytics(str(stream_id))
+    analytics = analytics_manager.get_stream_analytics(str(stream_id))
+    metrics = analytics_manager.calculate_engagement_metrics(str(stream_id))
+    
+    # Get real-time sales data
+    sales_data = db.session.query(
+        Product.name,
+        func.count(Order.id).label('orders'),
+        func.sum(Order.total_amount).label('revenue')
+    ).join(Order).filter(
+        Order.created_at >= stream.created_at
+    ).group_by(Product.id).all()
     
     return render_template('analytics/stream.html',
                          stream=stream,
-                         analytics=analytics)
+                         analytics=analytics,
+                         metrics=metrics,
+                         sales_data=sales_data)
+
+@analytics_bp.route('/analytics/heatmap/<int:stream_id>')
+def get_engagement_heatmap(stream_id):
+    if not session.get('is_seller'):
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    stream = StreamSession.query.get_or_404(stream_id)
+    if stream.seller_id != session['user_id']:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    analytics = analytics_manager.get_stream_analytics(str(stream_id))
+    return jsonify(analytics['heatmap_data'])

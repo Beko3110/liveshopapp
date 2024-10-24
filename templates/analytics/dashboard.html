@@ -4,43 +4,101 @@
 <div class="container">
     <h2 class="mb-4">Analytics Dashboard</h2>
     
-    <!-- Summary Cards -->
+    <!-- Real-time Overview -->
     <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Total Revenue (30 days)</h5>
-                    <h3 class="card-text">${{ "%.2f"|format(sales_data|sum(attribute='revenue')) }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Total Orders (30 days)</h5>
-                    <h3 class="card-text">{{ sales_data|sum(attribute='orders') }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">Active Streams</h5>
-                    <h3 class="card-text">{{ stream_data|selectattr('status', 'equalto', 'active')|list|length }}</h3>
+                    <h3 class="card-text" id="activeStreamsCount">
+                        {{ stream_metrics|selectattr('status', 'equalto', 'active')|list|length }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Today's Revenue</h5>
+                    <h3 class="card-text" id="todayRevenue">
+                        ${{ "%.2f"|format(sales_data|selectattr('hour', 'day_eq', today)|sum(attribute='revenue')) }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Viewers</h5>
+                    <h3 class="card-text" id="totalViewers">
+                        {{ stream_metrics|sum(attribute='total_viewers') }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Avg. Engagement Rate</h5>
+                    <h3 class="card-text" id="avgEngagementRate">
+                        {{ "%.1f"|format(stream_metrics|avg(attribute='engagement_rate')) }}%
+                    </h3>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Sales Chart -->
+    <!-- Revenue Chart -->
     <div class="card mb-4">
         <div class="card-body">
-            <h5 class="card-title">Sales Performance</h5>
-            <canvas id="salesChart"></canvas>
+            <h5 class="card-title">Revenue Trend (Last 7 Days)</h5>
+            <div class="d-flex justify-content-end mb-3">
+                <select class="form-select w-auto" id="revenueTimeframe">
+                    <option value="hourly">Hourly</option>
+                    <option value="daily">Daily</option>
+                </select>
+            </div>
+            <canvas id="revenueChart"></canvas>
         </div>
     </div>
 
-    <!-- Stream Performance Table -->
+    <!-- Best Streaming Times -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Recommended Streaming Times</h5>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Time</th>
+                            <th>Predicted Viewers</th>
+                            <th>Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for time in best_times %}
+                        <tr>
+                            <td>{{ ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][time.day] }}</td>
+                            <td>{{ "%02d:00"|format(time.hour) }}</td>
+                            <td>{{ time.predicted_viewers }}</td>
+                            <td>
+                                <div class="progress">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: {{ (time.predicted_viewers / best_times[0].predicted_viewers * 100)|round }}%">
+                                        {{ (time.predicted_viewers / best_times[0].predicted_viewers * 100)|round }}%
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stream Performance -->
     <div class="card">
         <div class="card-body">
             <h5 class="card-title">Stream Performance</h5>
@@ -50,20 +108,24 @@
                         <tr>
                             <th>Stream Title</th>
                             <th>Date</th>
+                            <th>Viewers</th>
+                            <th>Avg. Watch Time</th>
                             <th>Orders</th>
                             <th>Revenue</th>
-                            <th>Action</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for stream in stream_data %}
+                        {% for stream in stream_metrics %}
                         <tr>
                             <td>{{ stream.title }}</td>
                             <td>{{ stream.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ stream.total_viewers }}</td>
+                            <td>{{ (stream.avg_watch_time / 60)|round }} min</td>
                             <td>{{ stream.orders }}</td>
-                            <td>${{ "%.2f"|format(stream.revenue or 0) }}</td>
+                            <td>${{ "%.2f"|format(stream.revenue) }}</td>
                             <td>
-                                <a href="{{ url_for('analytics.stream_analytics_view', stream_id=stream.id) }}" 
+                                <a href="{{ url_for('analytics.stream_analytics', stream_id=stream.id) }}" 
                                    class="btn btn-sm btn-primary">
                                     View Details
                                 </a>
@@ -83,31 +145,97 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const salesData = {{ sales_data|tojson }};
-    
-    const ctx = document.getElementById('salesChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: salesData.map(d => new Date(d.date).toLocaleDateString()),
-            datasets: [{
-                label: 'Revenue',
-                data: salesData.map(d => d.revenue),
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: value => '$' + value
+    const revenueTimeframe = document.getElementById('revenueTimeframe');
+    let revenueChart;
+
+    function initRevenueChart(data, timeframe) {
+        const ctx = document.getElementById('revenueChart').getContext('2d');
+        if (revenueChart) {
+            revenueChart.destroy();
+        }
+
+        const groupedData = timeframe === 'hourly' ? data : groupDataByDay(data);
+        
+        revenueChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: groupedData.map(d => {
+                    const date = new Date(d.hour);
+                    return timeframe === 'hourly' 
+                        ? date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+                        : date.toLocaleDateString();
+                }),
+                datasets: [{
+                    label: 'Revenue',
+                    data: groupedData.map(d => d.revenue),
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    fill: true,
+                    backgroundColor: 'rgba(75, 192, 192, 0.1)'
+                }, {
+                    label: 'Orders',
+                    data: groupedData.map(d => d.orders),
+                    borderColor: 'rgb(153, 102, 255)',
+                    tension: 0.1,
+                    yAxisID: 'orders'
+                }]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Revenue ($)'
+                        },
+                        ticks: {
+                            callback: value => '$' + value
+                        }
+                    },
+                    orders: {
+                        beginAtZero: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Orders'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
                     }
                 }
             }
-        }
+        });
+    }
+
+    function groupDataByDay(data) {
+        const grouped = {};
+        data.forEach(item => {
+            const date = new Date(item.hour).toDateString();
+            if (!grouped[date]) {
+                grouped[date] = {
+                    hour: new Date(item.hour),
+                    revenue: 0,
+                    orders: 0
+                };
+            }
+            grouped[date].revenue += item.revenue;
+            grouped[date].orders += item.orders;
+        });
+        return Object.values(grouped);
+    }
+
+    revenueTimeframe.addEventListener('change', () => {
+        initRevenueChart(salesData, revenueTimeframe.value);
     });
+
+    // Initialize with hourly data
+    initRevenueChart(salesData, 'hourly');
 });
 </script>
 {% endblock %}
