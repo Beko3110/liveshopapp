@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">Analytics Dashboard</h2>
+    
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Revenue (30 days)</h5>
+                    <h3 class="card-text">${{ "%.2f"|format(sales_data|sum(attribute='revenue')) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Orders (30 days)</h5>
+                    <h3 class="card-text">{{ sales_data|sum(attribute='orders') }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Active Streams</h5>
+                    <h3 class="card-text">{{ stream_data|selectattr('status', 'equalto', 'active')|list|length }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Chart -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Sales Performance</h5>
+            <canvas id="salesChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Stream Performance Table -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Stream Performance</h5>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Stream Title</th>
+                            <th>Date</th>
+                            <th>Orders</th>
+                            <th>Revenue</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stream in stream_data %}
+                        <tr>
+                            <td>{{ stream.title }}</td>
+                            <td>{{ stream.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ stream.orders }}</td>
+                            <td>${{ "%.2f"|format(stream.revenue or 0) }}</td>
+                            <td>
+                                <a href="{{ url_for('analytics.stream_analytics_view', stream_id=stream.id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    View Details
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const salesData = {{ sales_data|tojson }};
+    
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: salesData.map(d => new Date(d.date).toLocaleDateString()),
+            datasets: [{
+                label: 'Revenue',
+                data: salesData.map(d => d.revenue),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: value => '$' + value
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

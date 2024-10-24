@@ -43,6 +43,7 @@ def create_app():
     from routes.stream import stream_bp
     from routes.social import social_bp
     from routes.rewards import rewards_bp
+    from routes.analytics import analytics_bp
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
@@ -50,5 +51,13 @@ def create_app():
     app.register_blueprint(stream_bp)
     app.register_blueprint(social_bp)
     app.register_blueprint(rewards_bp)
+    app.register_blueprint(analytics_bp)
+    
+    # Add custom template filters
+    @app.template_filter('sum')
+    def sum_filter(items, attribute=None):
+        if attribute:
+            return sum(getattr(item, attribute) or 0 for item in items)
+        return sum(items)
     
     return app

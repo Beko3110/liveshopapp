@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2 class="mb-4">Stream Analytics: {{ stream.title }}</h2>
+    
+    <!-- Real-time Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Current Viewers</h5>
+                    <h3 class="card-text" id="viewerCount">{{ analytics.viewers|length }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Peak Viewers</h5>
+                    <h3 class="card-text">{{ analytics.peak_viewers }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Engagement Metrics</h5>
+                    <div id="engagementMetrics">
+                        <div>Active Viewers: {{ analytics.active_viewers|length }}</div>
+                        <div>Engagement Rate: {{ "%.1f"|format(analytics.active_viewers|length / analytics.viewers|length * 100 if analytics.viewers|length > 0 else 0) }}%</div>
+                        <div>Stream Duration: {{ ((now() - stream.created_at).total_seconds() / 60)|int }} minutes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Viewer Retention Graph -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Viewer Retention</h5>
+            <canvas id="retentionChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Sales During Stream -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Sales Performance</h5>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Orders</th>
+                            <th>Revenue</th>
+                            <th>Conversion Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in stream.products %}
+                        <tr>
+                            <td>{{ product.name }}</td>
+                            <td>{{ product.orders|length }}</td>
+                            <td>${{ "%.2f"|format(product.orders|sum(attribute='total_amount')) }}</td>
+                            <td>{{ "%.1f"|format(product.orders|length / analytics.viewers|length * 100 if analytics.viewers|length > 0 else 0) }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script type="module" src="{{ url_for('static', filename='js/socket-client.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const retentionData = {{ analytics.view_durations|tojson }};
+    
+    // Create retention chart
+    const ctx = document.getElementById('retentionChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Object.keys(retentionData),
+            datasets: [{
+                label: 'Viewers',
+                data: Object.values(retentionData),
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

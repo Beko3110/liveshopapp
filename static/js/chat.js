@@ -1,15 +1,12 @@
-// Import shared socket instance
-import socket from './socket-client.js';
+// Import shared socket instance and ROOM_ID
+import socket, { ROOM_ID } from './socket-client.js';
 
 // Initialize chat functionality
 function initializeChat() {
     const chatMessages = document.getElementById('chat-messages');
     const messageForm = document.getElementById('message-form');
-    const streamContainer = document.getElementById('stream-container');
     
-    if (!streamContainer) return;
-    
-    const roomId = streamContainer.dataset.roomId;
+    if (!chatMessages || !messageForm || !ROOM_ID) return;
 
     // Send chat message
     messageForm.addEventListener('submit', e => {
@@ -20,7 +17,7 @@ function initializeChat() {
         if (message) {
             socket.emit('chat_message', {
                 message: message,
-                room: roomId
+                room: ROOM_ID
             });
             input.value = '';
         }
@@ -36,10 +33,10 @@ function initializeChat() {
     });
 
     // Join room
-    socket.emit('join_room', {
-        room: roomId
-    });
+    socket.emit('join_room', { room: ROOM_ID });
 }
 
 // Initialize chat when DOM is loaded
 document.addEventListener('DOMContentLoaded', initializeChat);
+
+export default initializeChat;

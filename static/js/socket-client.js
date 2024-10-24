@@ -3,7 +3,7 @@ const socket = io();
 
 // Get room ID from stream container if it exists
 const streamContainer = document.getElementById('stream-container');
-const ROOM_ID = streamContainer ? streamContainer.dataset.roomId : null;
+export const ROOM_ID = streamContainer ? streamContainer.dataset.roomId : null;
 
-// Export both socket and ROOM_ID
-export { socket as default, ROOM_ID };
+// Export socket instance as default
+export default socket;

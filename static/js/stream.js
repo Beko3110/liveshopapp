@@ -25,6 +25,10 @@ function showError(message) {
 // Start stream (for sellers)
 async function startStream() {
     try {
+        if (!ROOM_ID) {
+            throw new Error('Room ID not found');
+        }
+
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             throw new Error('Media devices not supported in your browser');
         }
@@ -51,7 +55,6 @@ async function startStream() {
         peerConnection.onconnectionstatechange = () => {
             if (peerConnection.connectionState === 'failed') {
                 showError('Connection failed. Please try rejoining the stream.');
-                // Attempt to reconnect
                 reconnectStream();
             }
         };
@@ -61,7 +64,6 @@ async function startStream() {
         
         socket.emit('offer', { offer, room: ROOM_ID });
 
-        // Show stop button after starting stream
         const startButton = document.getElementById('startStream');
         const stopButton = document.getElementById('stopStream');
         if (startButton && stopButton) {
@@ -69,18 +71,44 @@ async function startStream() {
             stopButton.style.display = 'inline-block';
         }
 
-        // Set connection timeout
         connectionTimeout = setTimeout(() => {
             if (peerConnection.connectionState !== 'connected') {
                 showError('Stream connection timeout. Please try again.');
                 stopStream();
             }
-        }, 30000); // 30 seconds timeout
+        }, 30000);
+
+        startAnalytics();
     } catch (error) {
         console.error('Error starting stream:', error);
         showError('Failed to start stream: ' + error.message);
         stopStream();
     }
+}
+
+// Analytics tracking
+function startAnalytics() {
+    let lastActivity = Date.now();
+    let isActive = true;
+
+    document.addEventListener('mousemove', () => {
+        lastActivity = Date.now();
+        if (!isActive) {
+            isActive = true;
+            socket.emit('viewer_active', { room: ROOM_ID });
+        }
+    });
+
+    setInterval(() => {
+        if (isActive && Date.now() - lastActivity > 60000) {
+            isActive = false;
+            socket.emit('viewer_inactive', { room: ROOM_ID });
+        }
+    }, 60000);
+
+    setInterval(() => {
+        socket.emit('viewer_heartbeat', { room: ROOM_ID });
+    }, 30000);
 }
 
 // Reconnect stream function
@@ -99,6 +127,10 @@ async function reconnectStream() {
 // Stop stream function
 function stopStream() {
     try {
+        if (!ROOM_ID) {
+            throw new Error('Room ID not found');
+        }
+
         if (connectionTimeout) {
             clearTimeout(connectionTimeout);
         }
@@ -121,7 +153,6 @@ function stopStream() {
             stopButton.style.display = 'none';
         }
         
-        // Notify server that stream has ended
         socket.emit('stream_ended', { room: ROOM_ID });
     } catch (error) {
         console.error('Error stopping stream:', error);
@@ -144,8 +175,12 @@ document.addEventListener('DOMContentLoaded', () => {
         stopStreamBtn.addEventListener('click', stopStream);
     }
     
-    // Join room on connection
-    socket.emit('join_room', { room: ROOM_ID });
+    if (ROOM_ID) {
+        socket.emit('join_room', { room: ROOM_ID });
+        if (!document.getElementById('startStream')) {
+            startAnalytics();
+        }
+    }
 });
 
 // Handle ICE candidates
@@ -192,7 +227,6 @@ socket.on('offer', async data => {
         
         socket.emit('answer', { answer, room: ROOM_ID });
 
-        // Set connection timeout
         connectionTimeout = setTimeout(() => {
             if (peerConnection.connectionState !== 'connected') {
                 showError('Stream connection timeout. Please try again.');
@@ -200,7 +234,7 @@ socket.on('offer', async data => {
                     peerConnection.close();
                 }
             }
-        }, 30000); // 30 seconds timeout
+        }, 30000);
     } catch (error) {
         console.error('Error joining stream:', error);
         showError('Failed to join stream: ' + error.message);
@@ -237,6 +271,25 @@ socket.on('answer', async data => {
     } catch (error) {
         console.error('Error setting remote description:', error);
         showError('Error establishing connection: ' + error.message);
+    }
+});
+
+// Handle analytics updates
+socket.on('viewer_count_update', data => {
+    const viewerCount = document.getElementById('viewerCount');
+    if (viewerCount) {
+        viewerCount.textContent = data.count;
+    }
+});
+
+socket.on('engagement_update', data => {
+    const engagementMetrics = document.getElementById('engagementMetrics');
+    if (engagementMetrics) {
+        engagementMetrics.innerHTML = `
+            <div>Active Viewers: ${data.activeViewers}</div>
+            <div>Engagement Rate: ${data.engagementRate}%</div>
+            <div>Average Watch Time: ${Math.floor(data.avgWatchTime / 60)} minutes</div>
+        `;
     }
 });
 
