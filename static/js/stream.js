@@ -160,6 +160,53 @@ socket.on('ice_candidate', async data => {
     }
 });
 
+// Handle offer (for viewers)
+socket.on('offer', async data => {
+    try {
+        peerConnection = new RTCPeerConnection(configuration);
+        
+        peerConnection.ontrack = event => {
+            const remoteVideo = document.getElementById('remoteVideo');
+            if (!remoteVideo) {
+                throw new Error('Remote video element not found');
+            }
+            remoteVideo.srcObject = event.streams[0];
+        };
+        
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                socket.emit('ice_candidate', { candidate: event.candidate, room: ROOM_ID });
+            }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+            if (peerConnection.connectionState === 'failed') {
+                showError('Connection failed. Please try rejoining the stream.');
+                reconnectStream();
+            }
+        };
+        
+        await peerConnection.setRemoteDescription(data.offer);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        
+        socket.emit('answer', { answer, room: ROOM_ID });
+
+        // Set connection timeout
+        connectionTimeout = setTimeout(() => {
+            if (peerConnection.connectionState !== 'connected') {
+                showError('Stream connection timeout. Please try again.');
+                if (peerConnection) {
+                    peerConnection.close();
+                }
+            }
+        }, 30000); // 30 seconds timeout
+    } catch (error) {
+        console.error('Error joining stream:', error);
+        showError('Failed to join stream: ' + error.message);
+    }
+});
+
 // Handle stream ended event
 socket.on('stream_ended', () => {
     try {

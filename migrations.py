@@ -23,6 +23,13 @@ def add_missing_columns():
                 ADD COLUMN IF NOT EXISTS previous_price FLOAT,
                 ADD COLUMN IF NOT EXISTS last_price_change TIMESTAMP;
             """))
+
+            # Add category and recording_url to stream_session table
+            conn.execute(text("""
+                ALTER TABLE stream_session
+                ADD COLUMN IF NOT EXISTS category VARCHAR(50),
+                ADD COLUMN IF NOT EXISTS recording_url VARCHAR(200);
+            """))
             
             # Create badge table if not exists
             conn.execute(text("""
@@ -81,6 +88,12 @@ def add_missing_columns():
                 );
             """))
             
+            # Add status column to poll table
+            conn.execute(text("""
+                ALTER TABLE poll
+                ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+            """))
+
             conn.commit()
 
 if __name__ == "__main__":
