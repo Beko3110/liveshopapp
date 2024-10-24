@@ -11,43 +11,70 @@
                 <div class="card-body">
                     <h5 class="card-title">Current Viewers</h5>
                     <h3 class="card-text" id="viewerCount">{{ analytics.viewers|length }}</h3>
+                    <div class="progress mt-2" style="height: 5px;">
+                        <div class="progress-bar" role="progressbar" style="width: {{ (analytics.viewers|length / analytics.peak_viewers * 100) if analytics.peak_viewers > 0 else 0 }}%"></div>
+                    </div>
+                    <small class="text-muted">Peak: {{ analytics.peak_viewers }}</small>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Peak Viewers</h5>
-                    <h3 class="card-text">{{ analytics.peak_viewers }}</h3>
+                    <h5 class="card-title">Engagement Rate</h5>
+                    <h3 class="card-text" id="engagementRate">
+                        {{ "%.1f"|format(analytics.active_viewers|length / analytics.viewers|length * 100 if analytics.viewers|length > 0 else 0) }}%
+                    </h3>
+                    <div id="engagementTrend" class="mt-2" style="height: 30px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Avg Watch Time</h5>
+                    <h3 class="card-text" id="avgWatchTime">
+                        {{ (analytics.avg_watch_time / 60)|int if analytics.avg_watch_time else 0 }} min
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Conversion Rate</h5>
+                    <h3 class="card-text" id="conversionRate">
+                        {{ "%.1f"|format(analytics.conversion_rate * 100 if analytics.conversion_rate else 0) }}%
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-time Charts -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Viewer Retention</h5>
+                    <canvas id="retentionChart"></canvas>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Engagement Metrics</h5>
-                    <div id="engagementMetrics">
-                        <div>Active Viewers: {{ analytics.active_viewers|length }}</div>
-                        <div>Engagement Rate: {{ "%.1f"|format(analytics.active_viewers|length / analytics.viewers|length * 100 if analytics.viewers|length > 0 else 0) }}%</div>
-                        <div>Stream Duration: {{ ((now() - stream.created_at).total_seconds() / 60)|int }} minutes</div>
-                    </div>
+                    <h5 class="card-title">Engagement Timeline</h5>
+                    <canvas id="engagementChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Viewer Retention Graph -->
+    <!-- Sales Performance -->
     <div class="card mb-4">
         <div class="card-body">
-            <h5 class="card-title">Viewer Retention</h5>
-            <canvas id="retentionChart"></canvas>
-        </div>
-    </div>
-
-    <!-- Sales During Stream -->
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title">Sales Performance</h5>
+            <h5 class="card-title">Real-time Sales</h5>
             <div class="table-responsive">
                 <table class="table">
                     <thead>
@@ -56,19 +83,43 @@
                             <th>Orders</th>
                             <th>Revenue</th>
                             <th>Conversion Rate</th>
+                            <th>Trend</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="salesTable">
                         {% for product in stream.products %}
-                        <tr>
+                        <tr data-product-id="{{ product.id }}">
                             <td>{{ product.name }}</td>
-                            <td>{{ product.orders|length }}</td>
-                            <td>${{ "%.2f"|format(product.orders|sum(attribute='total_amount')) }}</td>
-                            <td>{{ "%.1f"|format(product.orders|length / analytics.viewers|length * 100 if analytics.viewers|length > 0 else 0) }}%</td>
+                            <td class="orders-count">{{ product.orders|length }}</td>
+                            <td class="revenue">${{ "%.2f"|format(product.orders|sum(attribute='total_amount')) }}</td>
+                            <td class="conversion">
+                                {{ "%.1f"|format(product.orders|length / analytics.viewers|length * 100 if analytics.viewers|length > 0 else 0) }}%
+                            </td>
+                            <td class="trend">
+                                <canvas class="trend-chart" width="100" height="30"></canvas>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Viewer Demographics -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Viewer Demographics</h5>
+            <div class="row">
+                <div class="col-md-4">
+                    <canvas id="deviceChart"></canvas>
+                </div>
+                <div class="col-md-4">
+                    <canvas id="locationChart"></canvas>
+                </div>
+                <div class="col-md-4">
+                    <canvas id="referralChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -78,29 +129,151 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-<script type="module" src="{{ url_for('static', filename='js/socket-client.js') }}"></script>
-<script>
+<script type="module">
+import socket, { ROOM_ID } from "{{ url_for('static', filename='js/socket-client.js') }}";
+
 document.addEventListener('DOMContentLoaded', function() {
-    const retentionData = {{ analytics.view_durations|tojson }};
-    
-    // Create retention chart
-    const ctx = document.getElementById('retentionChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: Object.keys(retentionData),
-            datasets: [{
-                label: 'Viewers',
-                data: Object.values(retentionData),
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
+    // Initialize charts
+    const retentionChart = new Chart(
+        document.getElementById('retentionChart').getContext('2d'),
+        {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Viewers',
+                    data: [],
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        }
+    );
+
+    const engagementChart = new Chart(
+        document.getElementById('engagementChart').getContext('2d'),
+        {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Engagement Rate',
+                    data: [],
+                    borderColor: 'rgb(153, 102, 255)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        }
+    );
+
+    // Initialize trend charts
+    document.querySelectorAll('.trend-chart').forEach(canvas => {
+        new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: Array(10).fill(''),
+                datasets: [{
+                    data: Array(10).fill(0),
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        display: false
+                    },
+                    y: {
+                        display: false
+                    }
+                }
+            }
+        });
+    });
+
+    // Socket event handlers
+    socket.on('analytics_update', data => {
+        // Update viewer count
+        document.getElementById('viewerCount').textContent = data.viewers;
+        
+        // Update engagement rate
+        document.getElementById('engagementRate').textContent = 
+            `${data.engagementRate.toFixed(1)}%`;
+        
+        // Update average watch time
+        document.getElementById('avgWatchTime').textContent = 
+            `${Math.floor(data.avgWatchTime / 60)} min`;
+        
+        // Update conversion rate
+        document.getElementById('conversionRate').textContent = 
+            `${data.conversionRate.toFixed(1)}%`;
+        
+        // Update retention chart
+        if (data.retentionData) {
+            const timestamps = Object.keys(data.retentionData);
+            const viewers = Object.values(data.retentionData);
+            
+            retentionChart.data.labels = timestamps.map(ts => 
+                new Date(parseInt(ts)).toLocaleTimeString()
+            );
+            retentionChart.data.datasets[0].data = viewers;
+            retentionChart.update();
+        }
+        
+        // Update engagement chart
+        if (data.engagementHistory) {
+            engagementChart.data.labels = data.engagementHistory.map(
+                point => new Date(point.timestamp).toLocaleTimeString()
+            );
+            engagementChart.data.datasets[0].data = data.engagementHistory.map(
+                point => point.rate
+            );
+            engagementChart.update();
+        }
+        
+        // Update sales data
+        if (data.salesData) {
+            for (const productId in data.salesData) {
+                const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+                if (row) {
+                    const product = data.salesData[productId];
+                    row.querySelector('.orders-count').textContent = product.orders;
+                    row.querySelector('.revenue').textContent = 
+                        `$${product.revenue.toFixed(2)}`;
+                    row.querySelector('.conversion').textContent = 
+                        `${product.conversionRate.toFixed(1)}%`;
+                    
+                    // Update trend chart
+                    const chart = Chart.getChart(row.querySelector('.trend-chart'));
+                    if (chart && product.trend) {
+                        chart.data.datasets[0].data = product.trend;
+                        chart.update();
+                    }
                 }
             }
         }
