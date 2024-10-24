@@ -1,5 +1,5 @@
 // Import shared socket instance
-import socket from './socket-client.js';
+import socket, { ROOM_ID } from './socket-client.js';
 
 function initializeQA() {
     const questionsContainer = document.getElementById('questions-container');
@@ -7,8 +7,6 @@ function initializeQA() {
     const streamContainer = document.getElementById('stream-container');
     
     if (!streamContainer) return;
-    
-    const roomId = streamContainer.dataset.roomId;
 
     // Question filtering
     const filterButtons = document.createElement('div');
@@ -50,7 +48,7 @@ function initializeQA() {
             if (question) {
                 socket.emit('submit_question', {
                     question: question,
-                    room: roomId
+                    room: ROOM_ID
                 });
                 input.value = '';
             }
@@ -103,7 +101,7 @@ function initializeQA() {
                 const questionId = voteBtn.dataset.questionId;
                 socket.emit('vote_question', {
                     question_id: questionId,
-                    room: roomId
+                    room: ROOM_ID
                 });
             });
         }
@@ -120,7 +118,7 @@ function initializeQA() {
                     socket.emit('submit_answer', {
                         question_id: answerForm.dataset.questionId,
                         answer: answer,
-                        room: roomId
+                        room: ROOM_ID
                     });
                     input.value = '';
                 }
